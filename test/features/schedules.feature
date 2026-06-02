@@ -172,3 +172,9 @@ Feature: Schedules Service
       | vesselName | Incomplete |
     Then the response status is 422
     And the error message contains "required"
+
+  Scenario: GET /playground returns HTML playground page
+    When a GET request is sent to "/playground"
+    Then the response status is 200
+    And the Content-Type header contains "text/html"
+    And the response body contains "Schedules API Playground"

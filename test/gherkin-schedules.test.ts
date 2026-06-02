@@ -18,9 +18,15 @@ interface GherkinState {
   store: SchedulesStore | null;
   latestStatusCode: number | null;
   latestBody: any;
+  latestHeaders: Record<string, string> | null;
+  latestRawBody: string | null;
   latestScheduleId: string | null;
   scheduleIds: Map<string, string>;
   scheduleStatuses: Map<string, string>;
+}
+
+function initState(): GherkinState {
+  return { app: null, store: null, latestStatusCode: null, latestBody: null, latestHeaders: null, latestRawBody: null, latestScheduleId: null, scheduleIds: new Map(), scheduleStatuses: new Map() };
 }
 
 interface StepDefinition {
@@ -90,10 +96,6 @@ function parseFeature(path: string): ScenarioData[] {
   return scenarios;
 }
 
-function initState(): GherkinState {
-  return { app: null, store: null, latestStatusCode: null, latestBody: null, latestScheduleId: null, scheduleIds: new Map(), scheduleStatuses: new Map() };
-}
-
 async function runStep(step: ParsedStep, state: GherkinState): Promise<void> {
   for (const definition of stepDefinitions) {
     const match = step.text.match(definition.pattern);
@@ -138,6 +140,8 @@ async function request(state: GherkinState, method: string, url: string, payload
   assert.ok(state.app);
   const response = await state.app.inject({ method, url, payload, headers: headers ?? authHeader(method) } as any);
   state.latestStatusCode = response.statusCode;
+  state.latestHeaders = Object.fromEntries(Object.entries(response.headers).map(([k, v]) => [k.toLowerCase(), String(v)]));
+  state.latestRawBody = response.payload.toString();
   try {
     state.latestBody = response.json();
   } catch {
@@ -425,6 +429,20 @@ const stepDefinitions: StepDefinition[] = [
     run: async (state, fragment) => {
       const body = latestBody<any>(state);
       assert.match(body.error ?? "", new RegExp(fragment));
+    },
+  },
+  {
+    pattern: /^the Content-Type header contains "([^"]+)"$/,
+    run: async (state, fragment) => {
+      const ct = state.latestHeaders?.["content-type"] ?? "";
+      assert.ok(ct.includes(fragment), `Expected Content-Type to contain "${fragment}", got "${ct}"`);
+    },
+  },
+  {
+    pattern: /^the response body contains "([^"]+)"$/,
+    run: async (state, fragment) => {
+      const raw = state.latestRawBody ?? "";
+      assert.ok(raw.includes(fragment), `Expected response body to contain "${fragment}"`);
     },
   },
   {

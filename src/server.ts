@@ -182,6 +182,131 @@ export function buildServer(options: ServerOptions): FastifyInstance {
 
   app.get("/health", async () => ({ status: "ok" }));
 
+  app.get("/playground", async (_request, reply) => {
+    reply.header("content-type", "text/html; charset=utf-8");
+    return reply.send(Buffer.from(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schedules API Playground</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,BlinkMacSystemFont,sans-serif; background:#f5f5f5; color:#333; line-height:1.6; }
+  .container { max-width:800px; margin:2rem auto; padding:0 1rem; }
+  h1 { font-size:1.8rem; margin-bottom:.5rem; }
+  .subtitle { color:#666; margin-bottom:2rem; }
+  .card { background:#fff; border-radius:8px; padding:1.5rem; margin-bottom:1rem; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+  .card h2 { font-size:1.2rem; margin-bottom:.75rem; }
+  .endpoint { background:#f0f7ff; border-left:3px solid #0066cc; padding:.75rem 1rem; margin-bottom:.5rem; border-radius:0 4px 4px 0; }
+  .endpoint .method { display:inline-block; font-weight:700; color:#0066cc; min-width:5rem; }
+  .endpoint .path { font-family:monospace; }
+  .endpoint .desc { color:#555; font-size:.9rem; margin-top:.25rem; }
+  .status { display:inline-block; padding:.25rem .75rem; border-radius:4px; font-weight:600; font-size:.85rem; }
+  .status.ok { background:#d4edda; color:#155724; }
+  .status.info { background:#fff3cd; color:#856404; }
+  a { color:#0066cc; }
+  .token-box { background:#263238; color:#e0e0e0; padding:1rem; border-radius:4px; font-family:monospace; font-size:.85rem; margin-top:.5rem; word-break:break-all; }
+  .btn { display:inline-block; background:#0066cc; color:#fff; border:none; padding:.5rem 1rem; border-radius:4px; cursor:pointer; font-size:.9rem; }
+  .btn:hover { background:#0052a3; }
+  input, select { padding:.5rem; border:1px solid #ccc; border-radius:4px; font-size:.9rem; width:100%; margin-bottom:.5rem; }
+  label { display:block; font-weight:600; margin-bottom:.25rem; font-size:.9rem; }
+  .row { display:flex; gap:.75rem; }
+  .row > * { flex:1; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Schedules API Playground</h1>
+  <p class="subtitle">Vessel sailing schedules service — try the API endpoints below</p>
+
+  <div class="card">
+    <h2>Service Status</h2>
+    <p><span class="status ok">Healthy</span> <span id="health-msg"></span></p>
+    <p style="margin-top:.5rem;font-size:.9rem;color:#666;">Service: <code id="service-url">https://app-schedules-prod-9e31c1.azurewebsites.net</code></p>
+  </div>
+
+  <div class="card">
+    <h2>API Endpoints</h2>
+    <div class="endpoint"><span class="method">GET</span> <span class="path">/health</span><div class="desc">Health check</div></div>
+    <div class="endpoint"><span class="method">GET</span> <span class="path">/schedules?originPort=...&destinationPort=...&departureDateFrom=...&departureDateTo=...</span><div class="desc">Search public schedules</div></div>
+    <div class="endpoint"><span class="method">GET</span> <span class="path">/schedules/:id</span><div class="desc">Get schedule by ID</div></div>
+    <div class="endpoint"><span class="method">POST</span> <span class="path">/schedules</span><div class="desc">Create schedule (requires auth)</div></div>
+    <div class="endpoint"><span class="method">PUT</span> <span class="path">/schedules/:id</span><div class="desc">Update schedule (requires auth)</div></div>
+    <div class="endpoint"><span class="method">PATCH</span> <span class="path">/schedules/:id/status</span><div class="desc">Transition status (requires auth)</div></div>
+    <div class="endpoint"><span class="method">DELETE</span> <span class="path">/schedules/:id</span><div class="desc">Delete schedule (requires auth)</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Test Public Search</h2>
+    <div class="row">
+      <div><label>Origin Port</label><input id="origin" placeholder="e.g. CNSHA" value="NLRTM"></div>
+      <div><label>Destination Port</label><input id="dest" placeholder="e.g. NLRTM" value="SGSIN"></div>
+    </div>
+    <div class="row">
+      <div><label>From Date</label><input id="date-from" type="date" value="2026-06-01"></div>
+      <div><label>To Date</label><input id="date-to" type="date" value="2026-06-30"></div>
+    </div>
+    <button class="btn" id="search-btn">Search Schedules</button>
+    <pre id="search-result" class="token-box" style="margin-top:.75rem;display:none;"></pre>
+  </div>
+
+  <div class="card">
+    <h2>Get Schedule by ID</h2>
+    <label>Schedule ID</label>
+    <input id="schedule-id" placeholder="Paste a schedule UUID from the search results">
+    <button class="btn" id="get-btn">Get Schedule</button>
+    <pre id="get-result" class="token-box" style="margin-top:.75rem;display:none;"></pre>
+  </div>
+
+  <div class="card">
+    <h2>Generate Dev Token</h2>
+    <label>Scope</label>
+    <select id="token-scope"><option value="schedules:read">Read-only</option><option value="schedules:read schedules:modify">Read + Modify</option></select>
+    <button class="btn" id="token-btn">Generate Token</button>
+    <pre id="token-result" class="token-box" style="margin-top:.75rem;display:none;"></pre>
+  </div>
+</div>
+
+<script>
+const BASE = window.location.origin;
+
+document.getElementById("search-btn").onclick = async () => {
+  const origin = document.getElementById("origin").value;
+  const dest = document.getElementById("dest").value;
+  const from = document.getElementById("date-from").value;
+  const to = document.getElementById("date-to").value;
+  const params = new URLSearchParams({ originPort: origin, destinationPort: dest, departureDateFrom: from, departureDateTo: to });
+  const res = await fetch(BASE + "/schedules?" + params);
+  const data = await res.json();
+  const el = document.getElementById("search-result");
+  el.style.display = "block";
+  el.textContent = JSON.stringify(data, null, 2);
+};
+
+document.getElementById("get-btn").onclick = async () => {
+  const id = document.getElementById("schedule-id").value.trim();
+  if (!id) return;
+  const res = await fetch(BASE + "/schedules/" + id);
+  const data = await res.json();
+  const el = document.getElementById("get-result");
+  el.style.display = "block";
+  el.textContent = JSON.stringify(data, null, 2);
+};
+
+document.getElementById("token-btn").onclick = async () => {
+  const scope = document.getElementById("token-scope").value;
+  const res = await fetch(BASE + "/dev/generate-token", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope }) });
+  const data = await res.json();
+  const el = document.getElementById("token-result");
+  el.style.display = "block";
+  el.textContent = JSON.stringify(data, null, 2);
+};
+</script>
+</body>
+</html>`));
+  });
+
   app.post("/dev/generate-token", async (request, reply) => {
     const body = request.body as any;
     const sub = body?.sub ?? "anonymous";
