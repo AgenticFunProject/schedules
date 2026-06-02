@@ -31,7 +31,7 @@ export function createSchedule(
   createdBy: string,
 ): Schedule {
   const now = new Date().toISOString();
-  const id = uuidv4();
+  const id = body.id && typeof body.id === "string" && body.id.trim() ? body.id.trim() : uuidv4();
 
   validateScheduleDates(body);
 

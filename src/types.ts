@@ -29,6 +29,7 @@ export interface ScheduleInResponse extends Omit<Schedule, "capacityTEU" | "book
 }
 
 export interface CreateScheduleRequest {
+  id?: string;
   vesselName: string;
   voyageNumber: string;
   originPort: string;
