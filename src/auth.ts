@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 export enum Scope {
   READ = "schedules:read",
@@ -58,8 +58,9 @@ export function authenticateBearerToken(token: string, config: AuthConfig): Toke
     throw new Error("Invalid token format");
   }
   const [headerB64, bodyB64, signatureB64] = parts;
-  const expectedSig = sign(`${headerB64}.${bodyB64}`, config.secret);
-  if (signatureB64 !== expectedSig) {
+  const expectedSig = Buffer.from(sign(`${headerB64}.${bodyB64}`, config.secret), "base64url");
+  const actualSig = Buffer.from(signatureB64, "base64url");
+  if (expectedSig.length !== actualSig.length || !timingSafeEqual(expectedSig, actualSig)) {
     throw new Error("Invalid token signature");
   }
   let payload: TokenPayload;
